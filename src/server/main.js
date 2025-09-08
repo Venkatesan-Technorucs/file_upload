@@ -2,6 +2,8 @@ const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('node:path');
 const fs = require('fs').promises;
 const databaseManager = require('./database');
+// Uncomment the line below to use the optimized database manager
+// const databaseManager = require('./optimizedDatabase');
 const fileHandler = require('./fileHandler');
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
@@ -35,9 +37,26 @@ const createWindow = () => {
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 app.whenReady().then(async () => {
-  await databaseManager.initialize();
-  setupIpcHandlers();
-  createWindow();
+  try {
+    console.log('Initializing database...');
+    await databaseManager.initialize();
+    console.log('Database initialized successfully');
+    
+    setupIpcHandlers();
+    createWindow();
+
+    // Send ready event to renderer when fully loaded
+    setTimeout(() => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('app-ready');
+      }
+    }, 1000);
+  } catch (error) {
+    console.error('Failed to initialize application:', error);
+    // Create window anyway but with error state
+    setupIpcHandlers();
+    createWindow();
+  }
 
   // On OS X it's common to re-create a window in the app when the
   // dock icon is clicked and there are no other windows open.
@@ -75,18 +94,24 @@ function setupIpcHandlers() {
   // Notes operations
   ipcMain.handle('create-note', async (event, noteData) => {
     try {
-      return await databaseManager.createNote(noteData);
+      console.log('IPC: Creating note:', noteData?.title);
+      const result = await databaseManager.createNote(noteData);
+      console.log('IPC: Note created successfully:', result?.id);
+      return result;
     } catch (error) {
-      console.error('Error creating note:', error);
+      console.error('IPC: Error creating note:', error);
       throw error;
     }
   });
 
   ipcMain.handle('update-note', async (event, id, noteData) => {
     try {
-      return await databaseManager.updateNote(id, noteData);
+      console.log('IPC: Updating note:', id);
+      const result = await databaseManager.updateNote(id, noteData);
+      console.log('IPC: Note updated successfully:', result?.id);
+      return result;
     } catch (error) {
-      console.error('Error updating note:', error);
+      console.error('IPC: Error updating note:', error);
       throw error;
     }
   });
@@ -103,10 +128,14 @@ function setupIpcHandlers() {
 
   ipcMain.handle('get-all-notes', async () => {
     try {
-      return await databaseManager.getAllNotes();
+      console.log('IPC: Getting all notes...');
+      const notes = await databaseManager.getAllNotes();
+      console.log(`IPC: Retrieved ${notes?.length || 0} notes`);
+      return notes || [];
     } catch (error) {
-      console.error('Error getting notes:', error);
-      throw error;
+      console.error('IPC: Error getting notes:', error);
+      // Return empty array instead of throwing to prevent UI crashes
+      return [];
     }
   });
 
@@ -134,6 +163,96 @@ function setupIpcHandlers() {
       console.error('Error uploading file:', error);
       throw error;
     }
+  });
+
+  // New streaming file upload handler
+  ipcMain.handle('upload-file-stream', async (event, filePath, originalName, mimeType, noteId) => {
+    try {
+      let progressData = null;
+      
+      const savedFile = await fileHandler.saveFileStream(
+        filePath,
+        originalName,
+        mimeType,
+        (progress) => {
+          // Send progress updates to renderer
+          event.sender.send('upload-progress', progress);
+          progressData = progress;
+        }
+      );
+      
+      const dbRecord = await databaseManager.saveFile(savedFile, noteId);
+      
+      // Send completion notification
+      event.sender.send('upload-complete', {
+        uploadId: savedFile.uploadId,
+        file: dbRecord
+      });
+      
+      return dbRecord;
+    } catch (error) {
+      console.error('Error uploading file stream:', error);
+      event.sender.send('upload-error', {
+        error: error.message,
+        originalName
+      });
+      throw error;
+    }
+  });
+
+  // Chunked upload handlers
+  ipcMain.handle('initialize-chunked-upload', async (event, originalName, totalSize, mimeType) => {
+    try {
+      return await fileHandler.initializeChunkedUpload(originalName, totalSize, mimeType);
+    } catch (error) {
+      console.error('Error initializing chunked upload:', error);
+      throw error;
+    }
+  });
+
+  ipcMain.handle('upload-chunk', async (event, uploadId, chunkData, chunkIndex) => {
+    try {
+      const progress = await fileHandler.uploadChunk(uploadId, Buffer.from(chunkData), chunkIndex);
+      
+      // Send progress update
+      event.sender.send('upload-progress', progress);
+      
+      return progress;
+    } catch (error) {
+      console.error('Error uploading chunk:', error);
+      throw error;
+    }
+  });
+
+  ipcMain.handle('finalize-chunked-upload', async (event, uploadId, noteId) => {
+    try {
+      const savedFile = await fileHandler.finalizeChunkedUpload(uploadId);
+      const dbRecord = await databaseManager.saveFile(savedFile, noteId);
+      
+      // Send completion notification
+      event.sender.send('upload-complete', {
+        uploadId,
+        file: dbRecord
+      });
+      
+      return dbRecord;
+    } catch (error) {
+      console.error('Error finalizing chunked upload:', error);
+      throw error;
+    }
+  });
+
+  // Upload management
+  ipcMain.handle('get-upload-progress', async (event, uploadId) => {
+    return fileHandler.getUploadProgress(uploadId);
+  });
+
+  ipcMain.handle('get-all-active-uploads', async () => {
+    return fileHandler.getAllActiveUploads();
+  });
+
+  ipcMain.handle('cancel-upload', async (event, uploadId) => {
+    return fileHandler.cancelUpload(uploadId);
   });
 
   ipcMain.handle('upload-json-file', async (event, jsonData, fileName, noteId) => {
@@ -166,17 +285,32 @@ function setupIpcHandlers() {
 
       const files = [];
       for (const filePath of result.filePaths) {
-        const buffer = await fs.readFile(filePath);
+        // Only read file stats, not the entire file content for large files
         const stats = await fs.stat(filePath);
         const fileName = path.basename(filePath);
         
-        files.push({
-          name: fileName,
-          buffer: Array.from(buffer),
-          size: stats.size,
-          type: getFileType(fileName),
-          path: filePath
-        });
+        // For small files (< 10MB), read into memory for compatibility
+        // For large files, just provide the path for streaming
+        if (stats.size < 10 * 1024 * 1024) {
+          const buffer = await fs.readFile(filePath);
+          files.push({
+            name: fileName,
+            buffer: Array.from(buffer),
+            size: stats.size,
+            type: getFileType(fileName),
+            path: filePath,
+            useStreaming: false
+          });
+        } else {
+          files.push({
+            name: fileName,
+            buffer: null, // No buffer for large files
+            size: stats.size,
+            type: getFileType(fileName),
+            path: filePath,
+            useStreaming: true
+          });
+        }
       }
 
       return { files };

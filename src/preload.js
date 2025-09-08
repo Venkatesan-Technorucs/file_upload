@@ -17,6 +17,29 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // File operations
   uploadFile: (fileData, noteId) => ipcRenderer.invoke('upload-file', fileData, noteId),
+  uploadFileStream: (filePath, originalName, mimeType, noteId) => ipcRenderer.invoke('upload-file-stream', filePath, originalName, mimeType, noteId),
+  
+  // Chunked upload operations
+  initializeChunkedUpload: (originalName, totalSize, mimeType) => ipcRenderer.invoke('initialize-chunked-upload', originalName, totalSize, mimeType),
+  uploadChunk: (uploadId, chunkData, chunkIndex) => ipcRenderer.invoke('upload-chunk', uploadId, chunkData, chunkIndex),
+  finalizeChunkedUpload: (uploadId, noteId) => ipcRenderer.invoke('finalize-chunked-upload', uploadId, noteId),
+  
+  // Upload management
+  getUploadProgress: (uploadId) => ipcRenderer.invoke('get-upload-progress', uploadId),
+  getAllActiveUploads: () => ipcRenderer.invoke('get-all-active-uploads'),
+  cancelUpload: (uploadId) => ipcRenderer.invoke('cancel-upload', uploadId),
+  
+  // Upload event listeners
+  onUploadProgress: (callback) => ipcRenderer.on('upload-progress', callback),
+  onUploadComplete: (callback) => ipcRenderer.on('upload-complete', callback),
+  onUploadError: (callback) => ipcRenderer.on('upload-error', callback),
+  onAppReady: (callback) => ipcRenderer.on('app-ready', callback),
+  removeUploadListeners: () => {
+    ipcRenderer.removeAllListeners('upload-progress');
+    ipcRenderer.removeAllListeners('upload-complete');
+    ipcRenderer.removeAllListeners('upload-error');
+    ipcRenderer.removeAllListeners('app-ready');
+  },
   uploadJsonFile: (jsonData, fileName, noteId) => ipcRenderer.invoke('upload-json-file', jsonData, fileName, noteId),
   openFileDialog: () => ipcRenderer.invoke('open-file-dialog'),
   readFile: (filePath) => ipcRenderer.invoke('read-file', filePath),
@@ -24,6 +47,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Sync operations
   forceSync: () => ipcRenderer.invoke('force-sync'),
+  syncToOnline: () => ipcRenderer.invoke('force-sync'), // Alias for force-sync
 
   // Utility
   formatFileSize: (bytes) => {
