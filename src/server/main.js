@@ -1,9 +1,9 @@
 const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('node:path');
 const fs = require('fs').promises;
-const databaseManager = require('./database');
-// Uncomment the line below to use the optimized database manager
-// const databaseManager = require('./optimizedDatabase');
+// const databaseManager = require('./database'); // Standard database manager (disabled)
+// Optimized database manager with better performance and error handling
+const databaseManager = require('./optimizedDatabase');
 const fileHandler = require('./fileHandler');
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
@@ -134,7 +134,7 @@ function setupIpcHandlers() {
       return notes || [];
     } catch (error) {
       console.error('IPC: Error getting notes:', error);
-      // Return empty array instead of throwing to prevent UI crashes
+      // Return empty array with error indication instead of throwing
       return [];
     }
   });

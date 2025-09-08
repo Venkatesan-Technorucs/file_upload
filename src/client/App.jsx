@@ -80,14 +80,6 @@ const App = () => {
     throw new Error('Database initialization timeout');
   };
 
-  useEffect(() => {
-    if (searchQuery.trim()) {
-      searchNotes(searchQuery);
-    } else {
-      setFilteredNotes(notes);
-    }
-  }, [searchQuery, notes]);
-
   const loadNotes = async (forceReload = false) => {
     try {
       setError(null);
@@ -138,7 +130,7 @@ const App = () => {
     
     try {
       setError(null);
-      await window.electronAPI.syncToOnline();
+      await window.electronAPI.forceSync();
       await loadNotes(true); // Reload notes after sync with delay
       await loadDatabaseStatus();
       alert('Sync completed successfully!');

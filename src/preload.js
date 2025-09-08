@@ -47,7 +47,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Sync operations
   forceSync: () => ipcRenderer.invoke('force-sync'),
-  syncToOnline: () => ipcRenderer.invoke('force-sync'), // Alias for force-sync
 
   // Utility
   formatFileSize: (bytes) => {

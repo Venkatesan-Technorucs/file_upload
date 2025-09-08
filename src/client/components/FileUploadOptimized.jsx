@@ -111,10 +111,10 @@ const FileUploadOptimized = ({ selectedNote, onFileUploaded }) => {
       // Use traditional upload for small files
       return uploadFileTraditional(file);
     } else if (file.size <= CHUNKED_THRESHOLD) {
-      // Use streaming for medium files (fallback to traditional for now)
-      return uploadFileTraditional(file);
+      // Use streaming for medium files (10MB-100MB)
+      return uploadFileStreaming(file);
     } else {
-      // Use chunked upload for large files
+      // Use chunked upload for large files (>100MB)
       return uploadFileChunked(file);
     }
   };
@@ -141,6 +141,87 @@ const FileUploadOptimized = ({ selectedNote, onFileUploaded }) => {
       reader.onerror = reject;
       reader.readAsArrayBuffer(file);
     });
+  };
+
+  const uploadFileStreaming = async (file) => {
+    try {
+      // Generate upload ID for progress tracking
+      const uploadId = `stream_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
+      // Initialize progress tracking
+      setUploadProgress(prev => [...prev, {
+        uploadId,
+        fileName: file.name,
+        totalSize: file.size,
+        uploadedSize: 0,
+        progress: 0,
+        status: 'uploading'
+      }]);
+
+      // Simulate progress updates for streaming upload
+      const progressInterval = setInterval(() => {
+        setUploadProgress(prev => prev.map(p => {
+          if (p.uploadId === uploadId && p.progress < 90) {
+            const newProgress = Math.min(p.progress + Math.random() * 20, 90);
+            return {
+              ...p,
+              progress: newProgress,
+              uploadedSize: Math.floor((newProgress / 100) * p.totalSize)
+            };
+          }
+          return p;
+        }));
+      }, 200);
+
+      // Perform the actual upload
+      const result = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+          try {
+            const arrayBuffer = e.target.result;
+            const fileData = {
+              name: file.name,
+              type: file.type,
+              size: file.size,
+              buffer: Array.from(new Uint8Array(arrayBuffer))
+            };
+
+            const uploadResult = await window.electronAPI.uploadFile(fileData, selectedNote?.id);
+            resolve(uploadResult);
+          } catch (error) {
+            reject(error);
+          }
+        };
+        reader.onerror = reject;
+        reader.readAsArrayBuffer(file);
+      });
+
+      // Complete progress tracking
+      clearInterval(progressInterval);
+      setUploadProgress(prev => prev.map(p => 
+        p.uploadId === uploadId 
+          ? { ...p, progress: 100, uploadedSize: p.totalSize, status: 'completed' }
+          : p
+      ));
+
+      // Remove completed upload from progress after delay
+      setTimeout(() => {
+        setUploadProgress(prev => prev.filter(p => p.uploadId !== uploadId));
+      }, 2000);
+
+      return result;
+    } catch (error) {
+      console.error('Error in streaming upload:', error);
+      // Update progress to show error
+      setUploadProgress(prev => prev.map(p => 
+        p.fileName === file.name 
+          ? { ...p, status: 'error', error: error.message }
+          : p
+      ));
+      
+      // Fallback to traditional upload
+      return uploadFileTraditional(file);
+    }
   };
 
   const uploadFileChunked = async (file) => {

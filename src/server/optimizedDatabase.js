@@ -235,10 +235,6 @@ class OptimizedDatabaseManager {
       synced: {
         type: DataTypes.BOOLEAN,
         defaultValue: false
-      },
-      syncPriority: {
-        type: DataTypes.INTEGER,
-        defaultValue: 1
       }
     };
 
@@ -268,10 +264,6 @@ class OptimizedDatabaseManager {
       mimeType: {
         type: DataTypes.STRING,
         allowNull: false
-      },
-      hash: {
-        type: DataTypes.STRING,
-        allowNull: true
       },
       noteId: {
         type: DataTypes.UUID,
@@ -338,7 +330,8 @@ class OptimizedDatabaseManager {
     try {
       // Test MySQL connection
       await this.mysqlSequelize.authenticate();
-      await this.mysqlSequelize.sync();
+      // Force sync MySQL to ensure schema matches
+      await this.mysqlSequelize.sync({ alter: true });
       this.isOnline = true;
       console.log('MySQL database synced successfully');
       this.startBackgroundSync();
@@ -483,8 +476,11 @@ class OptimizedDatabaseManager {
   }
 
   async syncSingleNote(noteData) {
+    // Remove syncPriority field to avoid schema mismatch
+    const { syncPriority, ...noteDataWithoutPriority } = noteData;
+    
     const mysqlNote = {
-      ...noteData,
+      ...noteDataWithoutPriority,
       createdAt: new Date(noteData.createdAt),
       updatedAt: new Date(noteData.updatedAt),
       tags: typeof noteData.tags === 'string' ? JSON.parse(noteData.tags) : noteData.tags,
@@ -499,8 +495,11 @@ class OptimizedDatabaseManager {
   }
 
   async syncSingleFile(fileData) {
+    // Remove hash and syncPriority fields to avoid schema mismatch
+    const { hash, syncPriority, ...fileDataWithoutExtra } = fileData;
+    
     const mysqlFile = {
-      ...fileData,
+      ...fileDataWithoutExtra,
       createdAt: new Date(fileData.createdAt),
       synced: true
     };
@@ -684,6 +683,10 @@ class OptimizedDatabaseManager {
   }
 
   // Force sync method for manual trigger
+  async syncPendingData() {
+    return this.forceSyncPendingData();
+  }
+
   async forceSyncPendingData() {
     if (this.syncInProgress) {
       console.log('Sync already in progress');
