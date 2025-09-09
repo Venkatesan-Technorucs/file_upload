@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import NotesList from './components/NotesList';
 import NoteEditor from './components/NoteEditor';
 import FileUploadOptimized from './components/FileUploadOptimized';
+import LargeFileImporter from './components/LargeFileImporter';
 // import FileUpload from './components/FileUpload'; // Original component
 import StatusBar from './components/StatusBar';
 import SearchBar from './components/SearchBar';
 import DebugPanel from './components/DebugPanel';
+import DatabaseManager from './components/DatabaseManager';
 
 const App = () => {
   const [notes, setNotes] = useState([]);
@@ -353,6 +355,12 @@ const App = () => {
             selectedNote={selectedNote}
             onFileUploaded={() => loadNotes(true)}
           />
+
+          {/* Large File Importer */}
+          <LargeFileImporter
+            selectedNote={selectedNote}
+            onFileImported={() => loadNotes(true)}
+          />
         </div>
       </div>
 
@@ -369,6 +377,12 @@ const App = () => {
         dbStatus={dbStatus}
         isLoading={isLoading}
         error={error}
+      />
+
+      {/* Database Manager */}
+      <DatabaseManager
+        dbStatus={dbStatus}
+        onStatusUpdate={loadDatabaseStatus}
       />
     </div>
   );

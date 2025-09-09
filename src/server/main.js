@@ -348,6 +348,85 @@ function setupIpcHandlers() {
       throw error;
     }
   });
+
+  // Database management operations
+  ipcMain.handle('check-database-integrity', async () => {
+    try {
+      return await databaseManager.checkDatabaseIntegrity();
+    } catch (error) {
+      console.error('Error checking database integrity:', error);
+      throw error;
+    }
+  });
+
+  ipcMain.handle('repair-database', async () => {
+    try {
+      return await databaseManager.repairDatabase();
+    } catch (error) {
+      console.error('Error repairing database:', error);
+      throw error;
+    }
+  });
+
+  ipcMain.handle('create-database-backup', async () => {
+    try {
+      await databaseManager.createDatabaseBackup();
+      return { success: true, message: 'Backup created successfully' };
+    } catch (error) {
+      console.error('Error creating backup:', error);
+      throw error;
+    }
+  });
+
+  // Memory-efficient large file import
+  ipcMain.handle('import-large-file', async (event, filePath, noteId) => {
+    try {
+      console.log('Starting memory-optimized large file import:', filePath);
+      
+      // Enable garbage collection for this operation
+      if (global.gc) {
+        global.gc();
+      }
+
+      const result = await databaseManager.importLargeFile(
+        filePath, 
+        noteId,
+        (progress) => {
+          // Send progress updates to renderer
+          event.sender.send('import-progress', {
+            filePath,
+            ...progress
+          });
+        }
+      );
+
+      // Send completion notification
+      event.sender.send('import-complete', {
+        filePath,
+        result
+      });
+
+      return result;
+    } catch (error) {
+      console.error('Error importing large file:', error);
+      event.sender.send('import-error', {
+        filePath,
+        error: error.message
+      });
+      throw error;
+    }
+  });
+
+  // Get current memory usage
+  ipcMain.handle('get-memory-usage', async () => {
+    const memUsage = process.memoryUsage();
+    return {
+      rss: memUsage.rss,
+      heapUsed: memUsage.heapUsed,
+      heapTotal: memUsage.heapTotal,
+      external: memUsage.external
+    };
+  });
 }
 
 function getFileType(fileName) {

@@ -28,13 +28,13 @@ const DebugPanel = ({ notes, dbStatus, isLoading, error }) => {
         onClick={() => setShowDebug(true)}
         style={{
           position: 'fixed',
-          bottom: '10px',
-          right: '10px',
-          padding: '5px 10px',
-          backgroundColor: '#6c757d',
+          bottom: '50px',
+          left: '150px',
+          padding: '11px 24px',
+          backgroundColor: '#1c73c0ff',
           color: 'white',
           border: 'none',
-          borderRadius: '4px',
+          borderRadius: '18px',
           cursor: 'pointer',
           fontSize: '12px',
           zIndex: 1000
@@ -48,15 +48,15 @@ const DebugPanel = ({ notes, dbStatus, isLoading, error }) => {
   return (
     <div style={{
       position: 'fixed',
-      bottom: '10px',
-      right: '10px',
+      bottom: '50px',
+      left: '10px',
       width: '300px',
       backgroundColor: 'white',
       border: '1px solid #ddd',
       borderRadius: '4px',
       padding: '10px',
       fontSize: '12px',
-      zIndex: 1000,
+      zIndex: 1500,
       boxShadow: '0 2px 10px rgba(0,0,0,0.1)'
     }}>
       <div style={{

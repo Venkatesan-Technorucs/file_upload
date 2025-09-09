@@ -48,6 +48,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Sync operations
   forceSync: () => ipcRenderer.invoke('force-sync'),
 
+  // Database management
+  checkDatabaseIntegrity: () => ipcRenderer.invoke('check-database-integrity'),
+  repairDatabase: () => ipcRenderer.invoke('repair-database'),
+  createDatabaseBackup: () => ipcRenderer.invoke('create-database-backup'),
+  
+  // Memory-efficient large file operations
+  importLargeFile: (filePath, noteId) => ipcRenderer.invoke('import-large-file', filePath, noteId),
+  getMemoryUsage: () => ipcRenderer.invoke('get-memory-usage'),
+  
+  // Large file import event listeners
+  onImportProgress: (callback) => ipcRenderer.on('import-progress', callback),
+  onImportComplete: (callback) => ipcRenderer.on('import-complete', callback),
+  onImportError: (callback) => ipcRenderer.on('import-error', callback),
+
   // Utility
   formatFileSize: (bytes) => {
     if (bytes === 0) return '0 Bytes';
